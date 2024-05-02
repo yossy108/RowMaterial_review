@@ -305,6 +305,10 @@ if uploaded_file is not None:
         # ()の削除
         df_review["品目名称"] = df_review["品目名称"].replace("\(.*\)","",regex=True).replace("（.*）","",regex=True)
 
+        # ["測定値"]の列に欠損値(nan)がある場合は行ごと削除
+        # 数値計算において影響はないはず。ただし、N数に影響してくるか？（同品目でもnanのある項目のみN数が少なくなる）
+        df_review = df_review.dropna(subset = ["測定値"])
+
         # 日付順に並べ替え→重複削除
         df_review = df_review.sort_values(by="受入日", ascending=True)
         df_review = df_review.drop_duplicates(subset=["ロット", "検査項目"], keep="last", ignore_index=True) 
@@ -350,90 +354,85 @@ if uploaded_file is not None:
         # 空のリストを作成
         dfs_summary = []
 
-        try:
+        for group_keys, group_df in df_review.groupby(["品目名称", "検査項目"]):
+            n = len(group_df["測定値"])
+            if n > 1:
+                avg = statistics.mean(group_df["測定値"])
+                std = statistics.stdev(group_df["測定値"])
+                avg_m3s = avg - 3*std 
+                avg_p3s = avg + 3*std
+                avg_m4s = avg - 4*std
+                avg_p4s = avg + 4*std
+                min_value = min(group_df["測定値"])
+                max_value = max(group_df["測定値"])
+                LSL_value = group_df["LSL"].tail(1).iloc[0]
+                USL_value = group_df["USL"].tail(1).iloc[0]
+                LCL_value = group_df["LCL"].tail(1).iloc[0]
+                UCL_value = group_df["UCL"].tail(1).iloc[0]
+                LCLCR_value = calc_LCLCR(group_df["測定値"], LCL_value)
+                UCLCR_value = calc_UCLCR(group_df["測定値"], UCL_value)
+                Cpk_value = calc_Cpk(group_df["測定値"], LCL_value, UCL_value)
+                
+                dfs_summary.append(pd.DataFrame({
+                    "品目名称": [group_keys[0]],
+                    "検査項目": [group_keys[1]],
+                    "N数": [n],
+                    "Avg": [avg],
+                    "σ": [std],
+                    "Avg-3σ":[avg_m3s],
+                    "Avg+3σ":[avg_p3s],
+                    "Avg-4σ":[avg_m4s],
+                    "Avg+4σ":[avg_p4s],
+                    "min":[min_value],
+                    "max":[max_value],
+                    "LSL":[LSL_value],
+                    "USL":[USL_value],
+                    "LCL":[LCL_value],
+                    "UCL":[UCL_value],
+                    "LCLCR":[LCLCR_value],
+                    "UCLCR":[UCLCR_value],
+                    "Cpk":[Cpk_value],
+                }))
+                
+            else:
+                dfs_summary.append(pd.DataFrame({
+                    "品目名称": [group_keys[0]],
+                    "検査項目": [group_keys[1]],
+                    "N数": [0],
+                    "Avg": [0],
+                    "σ": [0],
+                    "Avg-3σ": [0],
+                    "Avg+3σ": [0],
+                    "Avg-4σ": [0],
+                    "Avg+4σ": [0],
+                    "min": [0],
+                    "max": [0],
+                    "LSL": [0],
+                    "USL": [0],
+                    "LCL": [0],
+                    "UCL": [0],
+                    "LCLCR": [0],
+                    "UCLCR": [0],
+                    "Cpk": [0],
+                }))
 
-            for group_keys, group_df in df_review.groupby(["品目名称", "検査項目"]):
-                n = len(group_df["測定値"])
-                if n > 1:
-                    avg = statistics.mean(group_df["測定値"])
-                    std = statistics.stdev(group_df["測定値"])
-                    avg_m3s = avg - 3*std 
-                    avg_p3s = avg + 3*std
-                    avg_m4s = avg - 4*std
-                    avg_p4s = avg + 4*std
-                    min_value = min(group_df["測定値"])
-                    max_value = max(group_df["測定値"])
-                    LSL_value = group_df["LSL"].tail(1).iloc[0]
-                    USL_value = group_df["USL"].tail(1).iloc[0]
-                    LCL_value = group_df["LCL"].tail(1).iloc[0]
-                    UCL_value = group_df["UCL"].tail(1).iloc[0]
-                    LCLCR_value = calc_LCLCR(group_df["測定値"], LCL_value)
-                    UCLCR_value = calc_UCLCR(group_df["測定値"], UCL_value)
-                    Cpk_value = calc_Cpk(group_df["測定値"], LCL_value, UCL_value)
-                    
-                    dfs_summary.append(pd.DataFrame({
-                        "品目名称": [group_keys[0]],
-                        "検査項目": [group_keys[1]],
-                        "N数": [n],
-                        "Avg": [avg],
-                        "σ": [std],
-                        "Avg-3σ":[avg_m3s],
-                        "Avg+3σ":[avg_p3s],
-                        "Avg-4σ":[avg_m4s],
-                        "Avg+4σ":[avg_p4s],
-                        "min":[min_value],
-                        "max":[max_value],
-                        "LSL":[LSL_value],
-                        "USL":[USL_value],
-                        "LCL":[LCL_value],
-                        "UCL":[UCL_value],
-                        "LCLCR":[LCLCR_value],
-                        "UCLCR":[UCLCR_value],
-                        "Cpk":[Cpk_value],
-                    }))
-                    
-                else:
-                    dfs_summary.append(pd.DataFrame({
-                        "品目名称": [group_keys[0]],
-                        "検査項目": [group_keys[1]],
-                        "N数": [0],
-                        "Avg": [0],
-                        "σ": [0],
-                        "Avg-3σ": [0],
-                        "Avg+3σ": [0],
-                        "Avg-4σ": [0],
-                        "Avg+4σ": [0],
-                        "min": [0],
-                        "max": [0],
-                        "LSL": [0],
-                        "USL": [0],
-                        "LCL": [0],
-                        "UCL": [0],
-                        "LCLCR": [0],
-                        "UCLCR": [0],
-                        "Cpk": [0],
-                    }))
+        df_summary = pd.concat(dfs_summary, ignore_index=True)
+        df_summary
 
-            df_summary = pd.concat(dfs_summary, ignore_index=True)
-            df_summary
+        # 平均値、σが0の行は削除
+        df_filtered = df_summary[(df_summary['Avg'] != 0) & (df_summary['σ'] != 0)]
+        # N数30以上を抽出
+        df_for_review = df_filtered[df_filtered["N数"] >= 30]
 
-            # 平均値、σが0の行は削除
-            df_filtered = df_summary[(df_summary['Avg'] != 0) & (df_summary['σ'] != 0)]
-            # N数30以上を抽出
-            df_for_review = df_filtered[df_filtered["N数"] >= 30]
+        # Excelファイルに書き込むためのExcelWriterを作成
+        summary_data_xlsx = BytesIO()
+        with pd.ExcelWriter(summary_data_xlsx, engine='xlsxwriter') as writer:
+            # df_summaryを1つ目のシートに書き込む
+            df_summary.to_excel(writer, sheet_name='Summary', index=False)
+            # df_reviewを2つ目のシートに書き込む
+            df_for_review.to_excel(writer, sheet_name='Review(Lot≧30)', index=False)
+        # Excelファイルを保存
+        writer.save()
+        out_xlsx = summary_data_xlsx.getvalue()
 
-            # Excelファイルに書き込むためのExcelWriterを作成
-            summary_data_xlsx = BytesIO()
-            with pd.ExcelWriter(summary_data_xlsx, engine='xlsxwriter') as writer:
-                # df_summaryを1つ目のシートに書き込む
-                df_summary.to_excel(writer, sheet_name='Summary', index=False)
-                # df_reviewを2つ目のシートに書き込む
-                df_for_review.to_excel(writer, sheet_name='Review(Lot≧30)', index=False)
-            # Excelファイルを保存
-            writer.save()
-            out_xlsx = summary_data_xlsx.getvalue()
-
-            st.download_button(label="Download All Summary", data=out_xlsx, file_name="summary_data.xlsx")
-        
-        except:
-            st.write('## データに欠損値があります。')
+        st.download_button(label="Download All Summary", data=out_xlsx, file_name="summary_data.xlsx")
