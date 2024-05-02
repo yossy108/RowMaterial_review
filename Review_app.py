@@ -35,6 +35,10 @@ if uploaded_file is not None:
 
     # ()の削除（同品目のものを統一化するため）
     df_uploaded["品目名称"] = df_uploaded["品目名称"].replace("\(.*\)","",regex=True).replace("（.*）","",regex=True)
+    
+    # ["測定値"]の列に欠損値(nan)がある場合は行ごと削除
+    # 数値計算において影響はないはず。ただし、N数に影響してくるか？（同品目でもnanのある項目のみN数が少なくなる）
+    df_uploaded = df_review.dropna(subset = ["測定値"])
 
     # 規格・管理値設定をしていない場合、nanにreplace。
     df_uploaded["USL"] = df_uploaded["USL"].replace(999999, np.nan)
