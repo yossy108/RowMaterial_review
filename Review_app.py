@@ -4,6 +4,7 @@ import numpy as np
 import altair as alt
 import statistics
 from io import BytesIO
+import openpyxl
 
 #初期値 (ファイル読み込み前のエラー防止)
 item_list=[]
@@ -12,12 +13,12 @@ df_uploaded = pd.DataFrame()
 df_review = pd.DataFrame()
 
 # タイトル
-st.title("ABF原料管理図トレンド")
+st.title("原料管理図トレンド")
 
 # 解析対象ファイルの読み込みボタン
 uploaded_file = st.file_uploader("読み込み用ファイルを選択してください")
 if uploaded_file is not None:
-    df_uploaded = pd.read_csv(uploaded_file, encoding='cp932')
+    df_uploaded = pd.read_csv(uploaded_file, encoding="cp932")
     df_review = df_uploaded
     # st.dataframe(df_uploaded.head())    # 削除
     
@@ -213,7 +214,7 @@ if uploaded_file is not None:
             col1.metric('Average', '-')
             col1.metric('Std.', '-')
             col1.metric("Cpk", "-")
-            col2.metric("Currend USL", "-")
+            col2.metric("Current USL", "-")
             col2.metric("Current LSL", "-")
             col3.metric('Current UCL', '-')
             col3.metric('Current LCL', '-')
@@ -238,14 +239,14 @@ if uploaded_file is not None:
             
             # 現行のUSL/LSLが設定されていない（欠損値, nan）場合は"-"とする
             if np.isnan(cur_USL):
-                col2.metric("Currend USL", "-")
+                col2.metric("Current USL", "-")
             else:
-                col2.metric("Currend USL", cur_USL)
+                col2.metric("Current USL", cur_USL)
             
             if np.isnan(cur_LSL):
-                col2.metric("Currend LSL", "-")
+                col2.metric("Current LSL", "-")
             else:
-                col2.metric("Currend LSL", cur_LSL)
+                col2.metric("Current LSL", cur_LSL)
 
             # 現行のUCL/LCLが設定されていない（欠損値, nan）場合は"-"とする
             if np.isnan(cur_UCL):
@@ -340,7 +341,7 @@ if uploaded_file is not None:
                 else: UCLCR = "-"
             else: UCLCR = "-"
             return UCLCR
-
+        
         # Cpkの算出式を定義
         def calc_Cpk(data, LSL, USL):
             mean_value = statistics.mean(data)
@@ -425,16 +426,64 @@ if uploaded_file is not None:
 
         # 平均値、σが0の行は削除
         df_filtered = df_summary[(df_summary['Avg'] != 0) & (df_summary['σ'] != 0)]
+        
         # N数30以上を抽出
         df_for_review = df_filtered[df_filtered["N数"] >= 30]
+        
+        # |CLCR|≦1.5を抽出
+        ## "-"を0.0001に置換（"-"だと後のabs()の計算ができないため）
+        df_for_review["LCLCR"].replace("-", 0.99999, inplace=True)
+        df_for_review["UCLCR"].replace("-", 0.99999, inplace=True)
+        df_for_review = df_for_review[(df_for_review["LCLCR"].abs() >= 1.5) | (df_for_review["UCLCR"].abs() >= 1.5)]
+
+        # ## 0.0001を"-"に置換（元の状態に戻すため）
+        # df_for_review["LCLCR"] = df_for_review["LCLCR"].replace(0.0001, "-")
+        # df_for_review["UCLCR"] = df_for_review["UCLCR"].replace(0.0001, "-")
 
         # Excelファイルに書き込むためのExcelWriterを作成
         summary_data_xlsx = BytesIO()
         with pd.ExcelWriter(summary_data_xlsx, engine='xlsxwriter') as writer:
             # df_summaryを1つ目のシートに書き込む
             df_summary.to_excel(writer, sheet_name='Summary', index=False)
+            
             # df_reviewを2つ目のシートに書き込む
-            df_for_review.to_excel(writer, sheet_name='Review(Lot≧30)', index=False)
+            df_for_review.to_excel(writer, sheet_name='Review(Lot≧30, |CLCR|≧1.5)', index=False)
+
+            # 2つ目のシートのワークブックとワークシートを取得
+            workbook = writer.book
+            worksheet = writer.sheets['Review(Lot≧30, |CLCR|≧1.5)']
+                    
+            # 薄い赤のRGB値
+            light_red_rgb = '#FFCCCC'
+            # 薄い青のRGB値
+            light_blue_rgb = '#CCE5FF'
+
+            # 条件に基づいてセルを着色
+            format_light_red = workbook.add_format({'pattern': 1, 'bg_color': light_red_rgb})  # 薄い赤の背景色
+            format_light_blue = workbook.add_format({'pattern': 1, 'bg_color': light_blue_rgb})  # 薄い青の背景色
+                    
+            # P列の絶対値が1.5以上のセルに薄い赤を塗る
+            worksheet.conditional_format('P2:P' + str(len(df_for_review)), {'type': 'cell',
+                                                                            'criteria': '>=',
+                                                                            'value': 1.5,
+                                                                            'format': format_light_red})
+
+            worksheet.conditional_format('P2:P' + str(len(df_for_review)), {'type': 'cell',
+                                                                            'criteria': '<=',
+                                                                            'value': -1.5,
+                                                                            'format': format_light_blue})
+                    
+            # Q列の絶対値が1.5以上のセルに薄い赤を塗る
+            worksheet.conditional_format('Q2:Q' + str(len(df_for_review)), {'type': 'cell',
+                                                                            'criteria': '>=',
+                                                                            'value': 1.5,
+                                                                            'format': format_light_red})
+                    
+            worksheet.conditional_format('Q2:Q' + str(len(df_for_review)), {'type': 'cell',
+                                                                            'criteria': '<=',
+                                                                            'value': -1.5,
+                                                                            'format': format_light_blue})
+
         # Excelファイルを保存
         writer.save()
         out_xlsx = summary_data_xlsx.getvalue()
