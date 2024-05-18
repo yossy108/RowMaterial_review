@@ -4,7 +4,6 @@ import numpy as np
 import altair as alt
 import statistics
 from io import BytesIO
-import openpyxl
 
 #初期値 (ファイル読み込み前のエラー防止)
 item_list=[]
