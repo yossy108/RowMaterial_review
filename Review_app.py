@@ -12,7 +12,7 @@ df_uploaded = pd.DataFrame()
 df_review = pd.DataFrame()
 
 # タイトル
-st.title("原料管理図トレンド")
+st.title("原料管理図作成アプリ")
 
 # 解析対象ファイルの読み込みボタン
 uploaded_file = st.file_uploader("読み込み用ファイルを選択してください")
@@ -146,22 +146,32 @@ if uploaded_file is not None:
         # cur_LCL_decimal_count = len(str(cur_LCL).split(".")[1]) if "." in str(cur_LCL) else 0
         # formatted_new_LCL =  "{:.{}f}".format(new_LCL, cur_LCL_decimal_count)
 
-        # USL/LSLのmax/minを算出
-        max_USL = max(df_uploaded["USL"])
-        min_LSL = min(df_uploaded["LSL"])
+        # UCL/LCLのmax/minを算出(欠損値があるとminがnanになるため欠損値を除いて算出)
+        max_UCL = df_uploaded["UCL"].dropna().max()
+        min_LCL = df_uploaded["LCL"].dropna().min()
+
+        # USL/LSLのmax/minを算出(欠損値があるとminがnanになるため欠損値を除いて算出)
+        max_USL = df_uploaded["USL"].dropna().max()
+        min_LSL = df_uploaded["LSL"].dropna().min()
 
         # グラフY軸の上下限を計算
         # 実績、新管理値、新規格値の中で最大値・最小値をY軸上下限とする
-        y_axis_upper = max(max_value, new_UCL, max_USL)
-        y_axis_lower = min(min_value, new_LCL, min_LSL)
+        y_axis_upper = max(max_value, new_UCL, max_UCL, max_USL)
+        y_axis_lower = min(min_value, new_LCL, min_LCL, min_LSL)
 
         # 新しい管理線をグラフに入れるため、データフレームに追加
         df_uploaded["new_UCL"] = new_UCL
         df_uploaded["new_LCL"] = new_LCL
 
-        # # グラフ上下限設定の計算が正しくできているかの確認（一応）
-        # df_uploaded["y_axis_upper"] = y_axis_upper
-        # df_uploaded["y_axis_lower"] = y_axis_lower
+        # # 正しく計算できているかの確認のため不要
+        # df_uploaded["max_UCL"] = max_UCL
+        # df_uploaded["min_LCL"] = min_LCL
+        # df_uploaded["max_USL"] = max_USL
+        # df_uploaded["min_LSL"] = min_LSL
+
+        # グラフ上下限設定の計算が正しくできているかの確認（一応）
+        df_uploaded["y_axis_upper"] = y_axis_upper
+        df_uploaded["y_axis_lower"] = y_axis_lower
         
         # st.dataframe(df_uploaded.tail(5))    # 削除
         
@@ -176,8 +186,8 @@ if uploaded_file is not None:
 
         # グラフ作成
         chart = base.mark_line(point=True).encode(
-            alt.Y("測定値:Q", title=item_selected + "_" + ins_selected + "   " + f"[{unit}]", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper]))
-            )
+            alt.Y("測定値:Q", title=item_selected + "_" + ins_selected + "   " + f"[{unit}]", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
+
 
         # 新旧CL
         cur_UCL_line = base.mark_line(color="green").encode(
@@ -189,17 +199,17 @@ if uploaded_file is not None:
         new_LCL_line = base.mark_line(color="red", strokeDash=[2,2]).encode(
             alt.Y("new_LCL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
 
-        # # SL
-        # cur_USL_line = base.mark_line(color="orange", strokeDash=[2,2]).encode(
-        #     alt.Y("USL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
-        # cur_LSL_line = base.mark_line(color="orange", strokeDash=[2,2]).encode(
-        #     alt.Y("LSL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
+        # USL/LSL(入れるとチャートが見づらくなるのでいったん保留)
+        cur_USL_line = base.mark_line(color="orange", strokeDash=[2,2]).encode(
+            alt.Y("USL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
+        cur_LSL_line = base.mark_line(color="orange", strokeDash=[2,2]).encode(
+            alt.Y("LSL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
 
         # データを重ねる
         # SLなし
         layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, new_UCL_line, new_LCL_line)
 
-        # # SLあり
+        # # USL/LSLあり
         # layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, new_UCL_line, new_LCL_line, cur_USL_line, cur_LSL_line)
 
         # タイトル、グラフの表示
