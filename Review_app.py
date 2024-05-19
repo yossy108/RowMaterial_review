@@ -437,17 +437,28 @@ if uploaded_file is not None:
         df_filtered = df_summary[(df_summary['Avg'] != 0) & (df_summary['σ'] != 0)]
         
         # N数30以上を抽出
-        df_for_review = df_filtered[df_filtered["N数"] >= 30]
+        df_filtered = df_filtered[df_filtered["N数"] >= 30]
         
-        # |CLCR|≦1.5を抽出
-        ## "-"を0.0001に置換（"-"だと後のabs()の計算ができないため）
-        df_for_review["LCLCR"].replace("-", 0.99999, inplace=True)
-        df_for_review["UCLCR"].replace("-", 0.99999, inplace=True)
-        df_for_review = df_for_review[(df_for_review["LCLCR"].abs() >= 1.5) | (df_for_review["UCLCR"].abs() >= 1.5)]
+        # |CLCR|≦1.5, |CLCR|≦1.0をそれぞれ抽出
+        ## 前処理として"-"を0.99999に置換（"-"だと後のabs()の計算ができないため）
+        df_filtered["LCLCR"].replace("-", 0.99999, inplace=True)
+        df_filtered["UCLCR"].replace("-", 0.99999, inplace=True)
+        df_filtered_1_5 = df_filtered[(df_filtered["LCLCR"].abs() >= 1.5) | (df_filtered["UCLCR"].abs() >= 1.5)]
+        df_filtered_1 = df_filtered[(df_filtered["LCLCR"].abs() >= 1.0) | (df_filtered["UCLCR"].abs() >= 1.0)]
 
-        # ## 0.0001を"-"に置換（元の状態に戻すため）
-        # df_for_review["LCLCR"] = df_for_review["LCLCR"].replace(0.0001, "-")
-        # df_for_review["UCLCR"] = df_for_review["UCLCR"].replace(0.0001, "-")
+        # ## 0.99999を"-"に置換（元の状態に戻すため）
+        # df_for_review["LCLCR"] = df_for_review["LCLCR"].replace(0.99999, "-")
+        # df_for_review["UCLCR"] = df_for_review["UCLCR"].replace(0.99999, "-")
+
+        # セルの背景色を設定
+        ## 濃い赤のRGB値
+        deep_red_rgb = "#FF3333"
+        ## 薄い赤のRGB値
+        light_red_rgb = "#FFCCCC"
+        ## 濃い青のRGB値
+        deep_blue_rgb = "#66B0FF"
+        ## 薄い青のRGB値
+        light_blue_rgb = "#CCE5FF"
 
         # Excelファイルに書き込むためのExcelWriterを作成
         summary_data_xlsx = BytesIO()
@@ -455,44 +466,96 @@ if uploaded_file is not None:
             # df_summaryを1つ目のシートに書き込む
             df_summary.to_excel(writer, sheet_name='Summary', index=False)
             
-            # df_reviewを2つ目のシートに書き込む
-            df_for_review.to_excel(writer, sheet_name='Review(Lot≧30, |CLCR|≧1.5)', index=False)
+            # df_filtered_1_5を2つ目のシートに書き込む
+            df_filtered_1_5.to_excel(writer, sheet_name='Review(Lot≧30, |CLCR|≧1.5)', index=False)
+
+            # df_filtered_1を3つ目のシートに書き込む
+            df_filtered_1.to_excel(writer, sheet_name='Review(Lot≧30, |CLCR|≧1.0)', index=False)
 
             # 2つ目のシートのワークブックとワークシートを取得
-            workbook = writer.book
-            worksheet = writer.sheets['Review(Lot≧30, |CLCR|≧1.5)']
-                    
-            # 薄い赤のRGB値
-            light_red_rgb = '#FFCCCC'
-            # 薄い青のRGB値
-            light_blue_rgb = '#CCE5FF'
+            workbook_1_5 = writer.book
+            worksheet_1_5 = writer.sheets['Review(Lot≧30, |CLCR|≧1.5)']
 
-            # 条件に基づいてセルを着色
-            format_light_red = workbook.add_format({'pattern': 1, 'bg_color': light_red_rgb})  # 薄い赤の背景色
-            format_light_blue = workbook.add_format({'pattern': 1, 'bg_color': light_blue_rgb})  # 薄い青の背景色
-                    
+            ## 条件に基づいてセルを着色
+            format_deep_red = workbook_1_5.add_format({'pattern': 1, 'bg_color': deep_red_rgb})  # 濃い赤の背景色
+            format_deep_blue = workbook_1_5.add_format({'pattern': 1, 'bg_color': deep_blue_rgb})  # 濃い青の背景色
+
             # P列の絶対値が1.5以上のセルに薄い赤を塗る
-            worksheet.conditional_format('P2:P' + str(len(df_for_review)), {'type': 'cell',
+            worksheet_1_5.conditional_format('P2:P' + str(len(df_filtered_1_5)), {'type': 'cell',
                                                                             'criteria': '>=',
                                                                             'value': 1.5,
-                                                                            'format': format_light_red})
+                                                                            'format': format_deep_red})
 
-            worksheet.conditional_format('P2:P' + str(len(df_for_review)), {'type': 'cell',
+            worksheet_1_5.conditional_format('P2:P' + str(len(df_filtered_1_5)), {'type': 'cell',
                                                                             'criteria': '<=',
                                                                             'value': -1.5,
-                                                                            'format': format_light_blue})
+                                                                            'format': format_deep_blue})
                     
             # Q列の絶対値が1.5以上のセルに薄い赤を塗る
-            worksheet.conditional_format('Q2:Q' + str(len(df_for_review)), {'type': 'cell',
+            worksheet_1_5.conditional_format('Q2:Q' + str(len(df_filtered_1_5)), {'type': 'cell',
                                                                             'criteria': '>=',
                                                                             'value': 1.5,
-                                                                            'format': format_light_red})
+                                                                            'format': format_deep_red})
                     
-            worksheet.conditional_format('Q2:Q' + str(len(df_for_review)), {'type': 'cell',
+            worksheet_1_5.conditional_format('Q2:Q' + str(len(df_filtered_1_5)), {'type': 'cell',
                                                                             'criteria': '<=',
                                                                             'value': -1.5,
+                                                                            'format': format_deep_blue})
+
+            # 3つ目のシートのワークブックとワークシートを取得
+            workbook_1 = writer.book
+            worksheet_1 = writer.sheets['Review(Lot≧30, |CLCR|≧1.0)']
+
+            ## 条件に基づいてセルを着色
+            format_deep_red = workbook_1.add_format({'pattern': 1, 'bg_color': deep_red_rgb})  # 濃い赤の背景色
+            format_light_red = workbook_1.add_format({'pattern': 1, 'bg_color': light_red_rgb})  # 薄い赤の背景色
+            format_deep_blue = workbook_1.add_format({'pattern': 1, 'bg_color': deep_blue_rgb})  # 濃い青の背景色
+            format_light_blue = workbook_1.add_format({'pattern': 1, 'bg_color': light_blue_rgb})  # 薄い青の背景色
+
+            # P列の絶対値が1.5以上のセルに濃い赤・青を塗る
+            worksheet_1.conditional_format('P2:P' + str(len(df_filtered_1)), {'type': 'cell',
+                                                                            'criteria': '>=',
+                                                                            'value': 1.5,
+                                                                            'format': format_deep_red})
+
+            worksheet_1.conditional_format('P2:P' + str(len(df_filtered_1)), {'type': 'cell',
+                                                                            'criteria': '<=',
+                                                                            'value': -1.5,
+                                                                            'format': format_deep_blue})
+
+            # P列の絶対値が1.0以上のセルに薄い赤・青を塗る
+            worksheet_1.conditional_format('P2:P' + str(len(df_filtered_1)), {'type': 'cell',
+                                                                            'criteria': '>=',
+                                                                            'value': 1.0,
+                                                                            'format': format_light_red})
+
+            worksheet_1.conditional_format('P2:P' + str(len(df_filtered_1)), {'type': 'cell',
+                                                                            'criteria': '<=',
+                                                                            'value': -1.0,
                                                                             'format': format_light_blue})
 
+            # Q列の絶対値が1.5以上のセルに濃い赤・青を塗る
+            worksheet_1.conditional_format('Q2:Q' + str(len(df_filtered_1)), {'type': 'cell',
+                                                                            'criteria': '>=',
+                                                                            'value': 1.5,
+                                                                            'format': format_deep_red})
+
+            worksheet_1.conditional_format('Q2:Q' + str(len(df_filtered_1)), {'type': 'cell',
+                                                                            'criteria': '<=',
+                                                                            'value': -1.5,
+                                                                            'format': format_deep_blue})
+
+            # Q列の絶対値が1.0以上のセルに薄い赤・青を塗る
+            worksheet_1.conditional_format('Q2:Q' + str(len(df_filtered_1)), {'type': 'cell',
+                                                                            'criteria': '>=',
+                                                                            'value': 1.0,
+                                                                            'format': format_light_red})
+
+            worksheet_1.conditional_format('Q2:Q' + str(len(df_filtered_1)), {'type': 'cell',
+                                                                            'criteria': '<=',
+                                                                            'value': -1.0,
+                                                                            'format': format_light_blue})
+            
         # Excelファイルを保存
         writer.save()
         out_xlsx = summary_data_xlsx.getvalue()
