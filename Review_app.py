@@ -193,31 +193,31 @@ if uploaded_file is not None:
             alt.Y("UCL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
         cur_LCL_line = base.mark_line(color="green").encode(
             alt.Y("LCL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
-        new_UCL_line = base.mark_line(color="red", strokeDash=[2,2]).encode(
+        new_UCL_line = base.mark_line(color="darkorange", strokeDash=[2,2]).encode(
             alt.Y("new_UCL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
-        new_LCL_line = base.mark_line(color="red", strokeDash=[2,2]).encode(
+        new_LCL_line = base.mark_line(color="darkorange", strokeDash=[2,2]).encode(
             alt.Y("new_LCL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
-
-        # USL/LSL(入れるとチャートが見づらくなるのでいったん保留)
-        cur_USL_line = base.mark_line(color="blue", strokeDash=[2,2]).encode(
+        
+        # 規格値
+        cur_USL_line = base.mark_line(color="red", strokeDash=[2,2]).encode(
             alt.Y("USL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
-        cur_LSL_line = base.mark_line(color="blue", strokeDash=[2,2]).encode(
+        cur_LSL_line = base.mark_line(color="red", strokeDash=[2,2]).encode(
             alt.Y("LSL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
 
-        option = st.sidebar.radio("トレンド分類", ("CL (green) + SL (blue)", "CL (green) + New CL (red)", "CL (green) + SL (blue) + New CL (red)"))
-        if option == "CL (green) + SL (blue)":
+        option = st.sidebar.radio("トレンド分類", ("CL (green) + SL (red)", "CL (green) + New CL (orange)", "CL (green) + SL (red) + New CL (orange)"))
+        if option == "CL (green) + SL (red)":
              # データを重ねる
             layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, cur_USL_line, cur_LSL_line)
             # タイトル、グラフの表示
             st.write('## トレンドチャート')
             st.altair_chart(layer, use_container_width=True)
-        if option == "CL (green) + New CL (red)":
+        if option == "CL (green) + New CL (orange)":
             # データを重ねる
             layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, new_UCL_line, new_LCL_line)
             # タイトル、グラフの表示
             st.write('## トレンドチャート')
             st.altair_chart(layer, use_container_width=True)
-        if option == "CL (green) + SL (blue) + New CL (red)":
+        if option == "CL (green) + SL (red) + New CL (orange)":
             # データを重ねる
             layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, new_UCL_line, new_LCL_line, cur_USL_line, cur_LSL_line)
             # タイトル、グラフの表示
