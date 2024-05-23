@@ -135,8 +135,8 @@ if uploaded_file is not None:
 
         # 新しい管理値案、CLCRを計算
         # 初期値はAve±3σに設定のため、CLCRの初期値は0となる
-        new_UCL = st.sidebar.number_input("UCL案（初期値 = Ave + 3σ）", value = avg+3*std)
-        new_LCL = st.sidebar.number_input("LCL案（初期値 = Ave - 3σ）", value = avg-3*std)
+        new_UCL = st.sidebar.number_input("New UCL（初期値 = Ave + 3σ）", value = avg+3*std)
+        new_LCL = st.sidebar.number_input("New LCL（初期値 = Ave - 3σ）", value = avg-3*std)
         new_UCLCR = calc_UCLCR(df_uploaded["測定値"], new_UCL)
         new_LCLCR = calc_LCLCR(df_uploaded["測定値"], new_LCL)
 
@@ -188,7 +188,6 @@ if uploaded_file is not None:
         chart = base.mark_line(point=True).encode(
             alt.Y("測定値:Q", title=item_selected + "_" + ins_selected + "   " + f"[{unit}]", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
 
-
         # 新旧CL
         cur_UCL_line = base.mark_line(color="green").encode(
             alt.Y("UCL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
@@ -200,21 +199,30 @@ if uploaded_file is not None:
             alt.Y("new_LCL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
 
         # USL/LSL(入れるとチャートが見づらくなるのでいったん保留)
-        cur_USL_line = base.mark_line(color="orange", strokeDash=[2,2]).encode(
+        cur_USL_line = base.mark_line(color="blue", strokeDash=[2,2]).encode(
             alt.Y("USL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
-        cur_LSL_line = base.mark_line(color="orange", strokeDash=[2,2]).encode(
+        cur_LSL_line = base.mark_line(color="blue", strokeDash=[2,2]).encode(
             alt.Y("LSL:Q", scale=alt.Scale(domain=[y_axis_lower, y_axis_upper])))
 
-        # データを重ねる
-        # SLなし
-        layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, new_UCL_line, new_LCL_line)
-
-        # # USL/LSLあり
-        # layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, new_UCL_line, new_LCL_line, cur_USL_line, cur_LSL_line)
-
-        # タイトル、グラフの表示
-        st.write('## トレンドチャート')
-        st.altair_chart(layer, use_container_width=True)
+        option = st.sidebar.radio("トレンド分類", ("CL (green) + SL (blue)", "CL (green) + New CL (red)", "CL (green) + SL (blue) + New CL (red)"))
+        if option == "CL (green) + SL (blue)":
+             # データを重ねる
+            layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, cur_USL_line, cur_LSL_line)
+            # タイトル、グラフの表示
+            st.write('## トレンドチャート')
+            st.altair_chart(layer, use_container_width=True)
+        if option == "CL (green) + New CL (red)":
+            # データを重ねる
+            layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, new_UCL_line, new_LCL_line)
+            # タイトル、グラフの表示
+            st.write('## トレンドチャート')
+            st.altair_chart(layer, use_container_width=True)
+        if option == "CL (green) + SL (blue) + New CL (red)":
+            # データを重ねる
+            layer = alt.layer(chart, cur_UCL_line, cur_LCL_line, new_UCL_line, new_LCL_line, cur_USL_line, cur_LSL_line)
+            # タイトル、グラフの表示
+            st.write('## トレンドチャート')
+            st.altair_chart(layer, use_container_width=True)
 
         # メトリクスの表示、データ取り込み前の初期値は - としておく
         col1, col2, col3, col4 = st.columns(4)
