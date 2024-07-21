@@ -40,7 +40,7 @@ if uploaded_file is not None:
     # 数値計算において影響はないはず。ただし、N数に影響してくるか？（同品目でもnanのある項目のみN数が少なくなる）
     df_uploaded = df_uploaded.dropna(subset = ["測定値"])
 
-    # 規格・管理値設定をしていない場合、nanにreplace。
+    # 規格・管理値設定をしていない場合(999999 or -99999)、nanにreplace。
     df_uploaded["USL"] = df_uploaded["USL"].replace(999999, np.nan)
     df_uploaded["LSL"] = df_uploaded["LSL"].replace(-99999, np.nan)
     df_uploaded["UCL"] = df_uploaded["UCL"].replace(999999, np.nan)
@@ -107,13 +107,17 @@ def calc_Cpk(data, USL, LSL):
 if uploaded_file is not None:
 
     if ins_selected is not None:
-        # 検査項目の絞り込み後、受入日順に並べ替え
+        # 検査項目の絞り込み
         df_uploaded = df_uploaded[df_uploaded["検査項目"]==ins_selected]
-        df_uploaded = df_uploaded.sort_values(by="受入日", ascending=True)
-        # st.dataframe(df_uploaded.head())    # 削除
+        
+        # 受入日順に並べ替え
+        # sort_values使用時は、引数にkind="stable"を設定しないとソート内容に重複がある際に異なるソート順になるため必須
+        df_uploaded = df_uploaded.sort_values(by="受入日", ascending=True, kind="stable")
+        # st.dataframe(df_uploaded)    # 削除
 
         # ロット重複削除（最終受入ロットを残す）
         df_uploaded = df_uploaded.drop_duplicates(subset="ロット", keep="last", ignore_index=True)
+        # st.dataframe(df_uploaded)    # 削除
         
         # 現行の規格値・管理値の抽出、CLCRの計算（規格値・管理値は最終受入ロットから抽出）
         cur_USL = df_uploaded["USL"].tail(1).iloc[0]
@@ -331,8 +335,11 @@ if uploaded_file is not None:
         # 数値計算において影響はないはず。ただし、N数に影響してくるか？（同品目でもnanのある項目のみN数が少なくなる）
         df_review = df_review.dropna(subset = ["測定値"])
 
-        # 日付順に並べ替え→重複削除
-        df_review = df_review.sort_values(by="受入日", ascending=True)
+        # 日付順に並べ替え
+        # sort_values使用時は、引数にkind="stable"を設定しないとソート内容に重複がある際に異なるソート順になるため必須
+        df_review = df_review.sort_values(by="受入日", ascending=True, kind="stable")
+        
+        # 重複削除
         df_review = df_review.drop_duplicates(subset=["ロット", "検査項目"], keep="last", ignore_index=True) 
 
         # LCLCRの算出式を定義
@@ -447,12 +454,12 @@ if uploaded_file is not None:
         # N数30以上を抽出
         df_filtered = df_filtered[df_filtered["N数"] >= 30]
         
-        # |CLCR|≦1.5, |CLCR|≦1.0をそれぞれ抽出
+        # |CLCR|<1.5, |CLCR|<1.0をそれぞれ抽出
         ## 前処理として"-"を0.99999に置換（"-"だと後のabs()の計算ができないため）
         df_filtered["LCLCR"].replace("-", 0.99999, inplace=True)
         df_filtered["UCLCR"].replace("-", 0.99999, inplace=True)
-        df_filtered_1_5 = df_filtered[(df_filtered["LCLCR"].abs() >= 1.5) | (df_filtered["UCLCR"].abs() >= 1.5)]
-        df_filtered_1 = df_filtered[(df_filtered["LCLCR"].abs() >= 1.0) | (df_filtered["UCLCR"].abs() >= 1.0)]
+        df_filtered_1_5 = df_filtered[(df_filtered["LCLCR"].abs() > 1.5) | (df_filtered["UCLCR"].abs() > 1.5)]
+        df_filtered_1 = df_filtered[(df_filtered["LCLCR"].abs() > 1.0) | (df_filtered["UCLCR"].abs() > 1.0)]
 
         # ## 0.99999を"-"に置換（元の状態に戻すため）
         # df_for_review["LCLCR"] = df_for_review["LCLCR"].replace(0.99999, "-")
@@ -475,44 +482,44 @@ if uploaded_file is not None:
             df_summary.to_excel(writer, sheet_name='Summary', index=False)
             
             # df_filtered_1_5を2つ目のシートに書き込む
-            df_filtered_1_5.to_excel(writer, sheet_name='Review(Lot≧30, |CLCR|≧1.5)', index=False)
+            df_filtered_1_5.to_excel(writer, sheet_name='Review(Lot≧30, |CLCR|>1.5)', index=False)
 
             # df_filtered_1を3つ目のシートに書き込む
-            df_filtered_1.to_excel(writer, sheet_name='Review(Lot≧30, |CLCR|≧1.0)', index=False)
+            df_filtered_1.to_excel(writer, sheet_name='Review(Lot≧30, |CLCR|>1.0)', index=False)
 
             # 2つ目のシートのワークブックとワークシートを取得
             workbook_1_5 = writer.book
-            worksheet_1_5 = writer.sheets['Review(Lot≧30, |CLCR|≧1.5)']
+            worksheet_1_5 = writer.sheets['Review(Lot≧30, |CLCR|>1.5)']
 
             ## 条件に基づいてセルを着色
             format_deep_red = workbook_1_5.add_format({'pattern': 1, 'bg_color': deep_red_rgb})  # 濃い赤の背景色
             format_deep_blue = workbook_1_5.add_format({'pattern': 1, 'bg_color': deep_blue_rgb})  # 濃い青の背景色
 
-            # P列の絶対値が1.5以上のセルに薄い赤を塗る
+            # P列の絶対値が1.5より大きいのセルに薄い赤を塗る
             worksheet_1_5.conditional_format('P2:P' + str(len(df_filtered_1_5)), {'type': 'cell',
-                                                                            'criteria': '>=',
+                                                                            'criteria': '>',
                                                                             'value': 1.5,
                                                                             'format': format_deep_red})
 
             worksheet_1_5.conditional_format('P2:P' + str(len(df_filtered_1_5)), {'type': 'cell',
-                                                                            'criteria': '<=',
+                                                                            'criteria': '<',
                                                                             'value': -1.5,
                                                                             'format': format_deep_blue})
                     
-            # Q列の絶対値が1.5以上のセルに薄い赤を塗る
+            # Q列の絶対値が1.5より大きいのセルに薄い赤を塗る
             worksheet_1_5.conditional_format('Q2:Q' + str(len(df_filtered_1_5)), {'type': 'cell',
-                                                                            'criteria': '>=',
+                                                                            'criteria': '>',
                                                                             'value': 1.5,
                                                                             'format': format_deep_red})
                     
             worksheet_1_5.conditional_format('Q2:Q' + str(len(df_filtered_1_5)), {'type': 'cell',
-                                                                            'criteria': '<=',
+                                                                            'criteria': '<',
                                                                             'value': -1.5,
                                                                             'format': format_deep_blue})
 
             # 3つ目のシートのワークブックとワークシートを取得
             workbook_1 = writer.book
-            worksheet_1 = writer.sheets['Review(Lot≧30, |CLCR|≧1.0)']
+            worksheet_1 = writer.sheets['Review(Lot≧30, |CLCR|>1.0)']
 
             ## 条件に基づいてセルを着色
             format_deep_red = workbook_1.add_format({'pattern': 1, 'bg_color': deep_red_rgb})  # 濃い赤の背景色
@@ -520,47 +527,47 @@ if uploaded_file is not None:
             format_deep_blue = workbook_1.add_format({'pattern': 1, 'bg_color': deep_blue_rgb})  # 濃い青の背景色
             format_light_blue = workbook_1.add_format({'pattern': 1, 'bg_color': light_blue_rgb})  # 薄い青の背景色
 
-            # P列の絶対値が1.5以上のセルに濃い赤・青を塗る
+            # P列の絶対値が1.5より大きいのセルに濃い赤・青を塗る
             worksheet_1.conditional_format('P2:P' + str(len(df_filtered_1)), {'type': 'cell',
-                                                                            'criteria': '>=',
+                                                                            'criteria': '>',
                                                                             'value': 1.5,
                                                                             'format': format_deep_red})
 
             worksheet_1.conditional_format('P2:P' + str(len(df_filtered_1)), {'type': 'cell',
-                                                                            'criteria': '<=',
+                                                                            'criteria': '<',
                                                                             'value': -1.5,
                                                                             'format': format_deep_blue})
 
-            # P列の絶対値が1.0以上のセルに薄い赤・青を塗る
+            # P列の絶対値が1.0より大きいのセルに薄い赤・青を塗る
             worksheet_1.conditional_format('P2:P' + str(len(df_filtered_1)), {'type': 'cell',
-                                                                            'criteria': '>=',
+                                                                            'criteria': '>',
                                                                             'value': 1.0,
                                                                             'format': format_light_red})
 
             worksheet_1.conditional_format('P2:P' + str(len(df_filtered_1)), {'type': 'cell',
-                                                                            'criteria': '<=',
+                                                                            'criteria': '<',
                                                                             'value': -1.0,
                                                                             'format': format_light_blue})
 
-            # Q列の絶対値が1.5以上のセルに濃い赤・青を塗る
+            # Q列の絶対値が1.5より大きいのセルに濃い赤・青を塗る
             worksheet_1.conditional_format('Q2:Q' + str(len(df_filtered_1)), {'type': 'cell',
-                                                                            'criteria': '>=',
+                                                                            'criteria': '>',
                                                                             'value': 1.5,
                                                                             'format': format_deep_red})
 
             worksheet_1.conditional_format('Q2:Q' + str(len(df_filtered_1)), {'type': 'cell',
-                                                                            'criteria': '<=',
+                                                                            'criteria': '<',
                                                                             'value': -1.5,
                                                                             'format': format_deep_blue})
 
-            # Q列の絶対値が1.0以上のセルに薄い赤・青を塗る
+            # Q列の絶対値が1.0より大きいのセルに薄い赤・青を塗る
             worksheet_1.conditional_format('Q2:Q' + str(len(df_filtered_1)), {'type': 'cell',
-                                                                            'criteria': '>=',
+                                                                            'criteria': '>',
                                                                             'value': 1.0,
                                                                             'format': format_light_red})
 
             worksheet_1.conditional_format('Q2:Q' + str(len(df_filtered_1)), {'type': 'cell',
-                                                                            'criteria': '<=',
+                                                                            'criteria': '<',
                                                                             'value': -1.0,
                                                                             'format': format_light_blue})
             
